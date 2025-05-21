@@ -1,0 +1,21 @@
+[package]
+name = "url-shortener-cucumber"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+cucumber ="0.21.1"
+tokio = { version = "1.10", features = ["macros", "rt-multi-thread", "time"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4.27"
+simple_logger = "5.0.0"
+
+[dependencies]
+rand = "0.9.1"
+
+
+[[test]]
+name = "url_shortener_steps"
+harness = false  # allows Cucumber to print output instead of libtest
