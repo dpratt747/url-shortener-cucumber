@@ -1,10 +1,13 @@
-use cucumber::{World as _, given, then, when};
-use rand::Rng;
+use bollard::models::ImageSummary;
+use cucumber::{given, then, when, World as _};
 use rand::distr::Alphanumeric;
+use rand::Rng;
 use reqwest::Client;
+use serde::de::Unexpected::Option;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use std::collections::HashMap;
+use bollard::container::RestartContainerOptions;
 
 const API: &str = "http://localhost:8080";
 
@@ -34,6 +37,103 @@ pub struct URLShortenerWorld {
     get_shortened_url_response: GetAllShortenUrlResponse,
 }
 
+#[given(expr = "I have a clean url shortener instance")]
+async fn clean_shortener_service(_: &mut URLShortenerWorld) {
+    let image_name = "url_shortener_rust";
+    let container_name = "url_shortener_rust_container";
+    let docker = bollard::Docker::connect_with_socket_defaults().unwrap();
+
+    let docker_images: Vec<ImageSummary> = docker
+        .list_images(None::<bollard::query_parameters::ListImagesOptions>)
+        .await
+        .unwrap();
+
+    let image_exists = docker_images
+        .iter()
+        .any(|img| img.repo_tags.iter().any(|s| s.contains(image_name)));
+
+    println!("image exists: {}", image_exists);
+    println!("image exists: {}", image_exists);
+    println!("image exists: {}", image_exists);
+
+    let mut filters_map = HashMap::new();
+    filters_map.insert("name".to_string(), vec![container_name.to_string()]);
+
+    let containers = docker
+        .list_containers(Some(bollard::query_parameters::ListContainersOptions {
+            all: true, // Include stopped containers
+            filters: Some(filters_map),
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+
+    // Configure the container
+    let config = bollard::models::ContainerCreateBody {
+        image: Some(format!("{}:latest", image_name)),
+        host_config: Some(bollard::models::HostConfig {
+            port_bindings: Some({
+                let mut port_bindings = HashMap::new();
+                port_bindings.insert(
+                    "8080/tcp".to_string(),
+                    Some(vec![bollard::models::PortBinding {
+                        host_ip: Some("0.0.0.0".to_string()), // Bind to all interfaces
+                        host_port: Some("8080".to_string()),  // Map to host port 8080
+                    }]),
+                );
+                port_bindings
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let create_options = bollard::query_parameters::CreateContainerOptionsBuilder::default()
+        .name(container_name)
+        .build();
+
+    let container = docker
+        .create_container(Some(create_options), config)
+        .await
+        .expect("Could not create container");
+
+    if containers.is_empty() && image_exists {
+        println!("no containers found");
+        println!("no containers found");
+        println!("no containers found");
+
+        // run the image
+        docker
+            .start_container(
+                &container.id,
+                None::<bollard::query_parameters::StartContainerOptions>,
+            )
+            .await
+            .unwrap();
+        // docker.start_container(&container.id, None).await.expect("TODO: panic message");
+        println!("containers started");
+        println!("containers started");
+        println!("containers started");
+    } else if !containers.is_empty() {
+        // restart the container
+        docker
+            .restart_container(
+                &container.id,
+                None::<bollard::query_parameters::RestartContainerOptions>,
+                // RestartContainerOptions
+                // None,
+            )
+            .await
+            .unwrap();
+        println!("containers restarted");
+        println!("containers restarted");
+        println!("containers restarted");
+    } else {
+        // create an image?
+        panic!("image not found");
+    }
+}
+
 #[given(expr = "I have a long URL {string}")]
 async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) {
     world.long_url = url;
@@ -53,7 +153,7 @@ async fn send_shorten_request(world: &mut URLShortenerWorld) {
         .json(&json_body)
         .send()
         .await
-        .unwrap();
+        .expect("Could not send request");
 
     match response.status() {
         status if status.is_success() => {

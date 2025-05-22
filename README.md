@@ -10,3 +10,12 @@ https://docs.rs/crate/reqwest/latest
 ```bash
 cargo test --test url_shortener_steps
 ```
+----
+
+spin up a docker image and tear it down before each scenario
+
+
+clean containers
+````bash
+docker stop $(docker ps -a -q) && docker container prune
+```
