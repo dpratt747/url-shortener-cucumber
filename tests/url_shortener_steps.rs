@@ -1,12 +1,13 @@
+#![allow(warnings)]
+use bollard::Docker;
 use bollard::container::{RestartContainerOptions, StartContainerOptions};
 use bollard::models::ImageSummary;
 use bollard::query_parameters::{
     ListContainersOptions, ListImagesOptions, RestartContainerOptionsBuilder, StopContainerOptions,
 };
-use bollard::Docker;
-use cucumber::{given, then, when, Cucumber, World as _};
-use rand::distr::Alphanumeric;
+use cucumber::{Cucumber, World as _, given, then, when};
 use rand::Rng;
+use rand::distr::Alphanumeric;
 use reqwest::Client;
 use serde::de::Unexpected::Option;
 use serde::{Deserialize, Serialize};
@@ -25,7 +26,10 @@ fn generate_random_url(base: &str) -> String {
     format!("{}/{}", base, random_part)
 }
 
-async fn get_container_id(docker: &Docker, filters: HashMap<String, Vec<String>>) -> std::option::Option<String> {
+async fn get_container_id(
+    docker: &Docker,
+    filters: HashMap<String, Vec<String>>,
+) -> std::option::Option<String> {
     let containers = docker
         .list_containers(Some(ListContainersOptions {
             all: true, // Include stopped containers
@@ -46,7 +50,10 @@ async fn get_container_id(docker: &Docker, filters: HashMap<String, Vec<String>>
 async fn wait_for_container_running(docker: &Docker, container_id: &str) {
     loop {
         let inspect = docker
-            .inspect_container(container_id, None::<bollard::container::InspectContainerOptions>)
+            .inspect_container(
+                container_id,
+                None::<bollard::container::InspectContainerOptions>,
+            )
             .await
             .expect("Unable to inspect container");
 
@@ -80,8 +87,10 @@ async fn clean_shortener_service(_: &mut URLShortenerWorld) {
     let container_name = "url_shortener_rust_container";
     let docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
 
-    let docker_images: Vec<ImageSummary> =
-        docker.list_images(None::<ListImagesOptions>).await.expect("Unable to list images");
+    let docker_images: Vec<ImageSummary> = docker
+        .list_images(None::<ListImagesOptions>)
+        .await
+        .expect("Unable to list images");
 
     let image_exists = docker_images
         .iter()
@@ -124,34 +133,43 @@ async fn clean_shortener_service(_: &mut URLShortenerWorld) {
         .build();
 
     if !image_exists {
-        println!("Image doesn't exist");
-        println!("Image doesn't exist");
-        panic!("There is no docker image found! Expected the following image name {}", image_name);
+        panic!(
+            "There is no docker image found! Expected the following image name {}",
+            image_name
+        );
     }
 
     if containers.is_empty() {
-        println!("container doesn't exist");
-        println!("container doesn't exist");
-        println!("container doesn't exist");
-
+        // create and start the container
         docker
             .create_container(Some(create_options), config)
             .await
             .expect("Could not create container");
+
+        docker.start_container(&container_name, None::<StartContainerOptions<String>>)
+            .await
+            .expect("Could not start container");
+    } else {
+        // restart the container
+        docker
+            .restart_container(
+                &get_container_id(&docker, filters_map.clone())
+                    .await
+                    .expect("Unable to get container id"),
+                None::<RestartContainerOptions>,
+            )
+            .await
+            .expect("Could not restart container");
     }
 
-    // restart the container
-    docker
-        .restart_container(
-            &get_container_id(&docker, filters_map.clone()).await.expect("Unable to get container id"),
-            None::<RestartContainerOptions>,
-        )
-        .await
-        .expect("Could not restart container");
-
     // need to wait for the restart to finish
-
-    wait_for_container_running(&docker, &get_container_id(&docker, filters_map.clone()).await.expect("Unable to get container id")).await;
+    wait_for_container_running(
+        &docker,
+        &get_container_id(&docker, filters_map.clone())
+            .await
+            .expect("Unable to get container id"),
+    )
+    .await;
 }
 
 #[given(expr = "I have a long URL {string}")]

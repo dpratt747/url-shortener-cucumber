@@ -14,6 +14,14 @@ cargo test --test url_shortener_steps
 
 spin up a docker image and tear it down before each scenario
 
+--- 
+## Requirements:
+
+need to have a docker image for the url_shortener:
+```bash
+docker build -t url_shortener_rust .
+```
+
 
 clean containers
 ````bash
