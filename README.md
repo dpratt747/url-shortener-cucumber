@@ -27,3 +27,7 @@ clean containers
 ````bash
 docker stop $(docker ps -a -q) && docker container prune
 ```
+
+---
+
+The specs now create a new docker container for each scenario and stops the container after each scenario

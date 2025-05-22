@@ -9,12 +9,12 @@ use cucumber::{Cucumber, World as _, given, then, when};
 use rand::Rng;
 use rand::distr::Alphanumeric;
 use reqwest::Client;
-use serde::de::Unexpected::Option;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use std::collections::HashMap;
+use std::net::TcpListener;
 
-const API: &str = "http://localhost:8080";
+mod utility;
 
 fn generate_random_url(base: &str) -> String {
     let random_part: String = rand::rng()
@@ -26,10 +26,22 @@ fn generate_random_url(base: &str) -> String {
     format!("{}/{}", base, random_part)
 }
 
+fn generate_random_word(length: usize) -> String {
+    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
+    let mut rng = rand::rng();
+
+    (0..length)
+        .map(|_| {
+            let idx = rng.random_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
+}
+
 async fn get_container_id(
     docker: &Docker,
     filters: HashMap<String, Vec<String>>,
-) -> std::option::Option<String> {
+) -> Option<String> {
     let containers = docker
         .list_containers(Some(ListContainersOptions {
             all: true, // Include stopped containers
@@ -47,7 +59,7 @@ async fn get_container_id(
     None
 }
 
-async fn wait_for_container_running(docker: &Docker, container_id: &str) {
+async fn wait_for_container_to_start_running(docker: &Docker, container_id: &str) {
     loop {
         let inspect = docker
             .inspect_container(
@@ -61,6 +73,15 @@ async fn wait_for_container_running(docker: &Docker, container_id: &str) {
             if state.running.unwrap_or(false) {
                 return ();
             }
+        }
+    }
+}
+
+fn get_available_host_port(world: &mut URLShortenerWorld) {
+    // Binding to port 0 lets the OS assign an available port
+    if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
+        if let Ok(addr) = listener.local_addr() {
+            world.container_port = addr.port();
         }
     }
 }
@@ -79,12 +100,20 @@ pub struct URLShortenerWorld {
     long_url: String,
     shorten_url_status_code: u16,
     get_shortened_url_response: GetAllShortenUrlResponse,
+    container_port: u16,
+    container_name: String,
 }
 
-#[given(expr = "I have a clean url shortener instance")]
-async fn clean_shortener_service(_: &mut URLShortenerWorld) {
+#[given(expr = "I have a running url shortener docker container")]
+async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
     let image_name = "url_shortener_rust";
-    let container_name = "url_shortener_rust_container";
+
+    world.container_name = generate_random_word(10).to_string();
+
+    println!("container_name: {}", world.container_name);
+    println!("container_name: {}", world.container_name);
+    println!("container_name: {}", world.container_name);
+
     let docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
 
     let docker_images: Vec<ImageSummary> = docker
@@ -97,16 +126,9 @@ async fn clean_shortener_service(_: &mut URLShortenerWorld) {
         .any(|img| img.repo_tags.iter().any(|s| s.contains(image_name)));
 
     let mut filters_map: HashMap<String, Vec<String>> = HashMap::new();
-    filters_map.insert("name".to_string(), vec![container_name.to_string()]);
+    filters_map.insert("name".to_string(), vec![world.container_name.clone()]);
 
-    let containers = docker
-        .list_containers(Some(ListContainersOptions {
-            all: true, // Include stopped containers
-            filters: Some(filters_map.clone()),
-            ..Default::default()
-        }))
-        .await
-        .expect("Unable to list containers");
+    get_available_host_port(world);
 
     // Configure the container
     let config = bollard::models::ContainerCreateBody {
@@ -118,7 +140,9 @@ async fn clean_shortener_service(_: &mut URLShortenerWorld) {
                     "8080/tcp".to_string(),
                     Some(vec![bollard::models::PortBinding {
                         host_ip: Some("0.0.0.0".to_string()), // Bind to all interfaces
-                        host_port: Some("8080".to_string()),  // Map to host port 8080
+                        host_port: Some(world.container_port.to_string()), // Map to host port 8080 // see if I can get free ports
+                                                                           // host_port: world.container_port.map(|a| a.to_string()),  // Map to host port 8080 // see if I can get free ports
+                                                                           // host_port: Some("8080".to_string()),  // Map to host port 8080 // see if I can get free ports
                     }]),
                 );
                 port_bindings
@@ -129,7 +153,7 @@ async fn clean_shortener_service(_: &mut URLShortenerWorld) {
     };
 
     let create_options = bollard::query_parameters::CreateContainerOptionsBuilder::default()
-        .name(container_name)
+        .name(&world.container_name)
         .build();
 
     if !image_exists {
@@ -139,31 +163,18 @@ async fn clean_shortener_service(_: &mut URLShortenerWorld) {
         );
     }
 
-    if containers.is_empty() {
-        // create and start the container
-        docker
-            .create_container(Some(create_options), config)
-            .await
-            .expect("Could not create container");
+    docker
+        .create_container(Some(create_options), config)
+        .await
+        .expect("Could not create container");
 
-        docker.start_container(&container_name, None::<StartContainerOptions<String>>)
-            .await
-            .expect("Could not start container");
-    } else {
-        // restart the container
-        docker
-            .restart_container(
-                &get_container_id(&docker, filters_map.clone())
-                    .await
-                    .expect("Unable to get container id"),
-                None::<RestartContainerOptions>,
-            )
-            .await
-            .expect("Could not restart container");
-    }
+    docker
+        .start_container(&world.container_name, None::<StartContainerOptions<String>>)
+        .await
+        .expect("Could not start container");
 
     // need to wait for the restart to finish
-    wait_for_container_running(
+    wait_for_container_to_start_running(
         &docker,
         &get_container_id(&docker, filters_map.clone())
             .await
@@ -180,7 +191,8 @@ async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) {
 #[when(expr = "I make a request to the shorten URL")]
 async fn send_shorten_request(world: &mut URLShortenerWorld) {
     let client: Client = Client::new();
-    let endpoint: String = format!("{}/v1/shorten", API);
+    let api = format!("http://localhost:{}", world.container_port.to_string());
+    let endpoint: String = format!("{}/v1/shorten", api);
     let body = ShortenUrlRequest {
         longUrl: world.long_url.clone(),
     };
@@ -221,9 +233,11 @@ async fn post_shorten_url_result(
 }
 
 #[given(expr = "I make {int} requests to the shorten URL endpoint")]
-async fn post_shorten_n_times(_: &mut URLShortenerWorld, number_of_requests: u16) {
+async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) {
     let client: Client = Client::new();
-    let endpoint: String = format!("{}/v1/shorten", API);
+    let api = format!("http://localhost:{}", world.container_port.to_string());
+
+    let endpoint: String = format!("{}/v1/shorten", api);
 
     for _ in 0..number_of_requests {
         let body = ShortenUrlRequest {
@@ -258,7 +272,8 @@ async fn post_shorten_n_times(_: &mut URLShortenerWorld, number_of_requests: u16
 #[when(expr = "I make a request to get all shortened endpoints")]
 async fn get_all_shortened_urls(world: &mut URLShortenerWorld) {
     let client: Client = Client::new();
-    let endpoint: String = format!("{}/v1/all", API);
+    let api = format!("http://localhost:{}", world.container_port.to_string());
+    let endpoint: String = format!("{}/v1/all", api);
 
     let response = client.get(&endpoint).send().await.unwrap();
     let status = response.status();
@@ -294,7 +309,32 @@ async fn get_all_shortened_urls_equals_n_responses(
 async fn main() {
     SimpleLogger::new().init().unwrap();
     log::info!("Running feature files");
-    URLShortenerWorld::run("tests/features/url_shortener/url_shortener.feature").await;
+    URLShortenerWorld::cucumber()
+        .after(|_feature, _rule, _scenario, _ev, _world| {
+            Box::pin(async move {
+                let docker =
+                    Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
+                if let Some(world) = _world {
+
+                    println!("stopping container: {}", world.container_name);
+                    println!("stopping container: {}", world.container_name);
+                    println!("stopping container: {}", world.container_name);
+
+                    docker
+                        .stop_container(&world.container_name, None::<StopContainerOptions>)
+                        .await
+                        .expect("Unable to stop container");
+                }
+            })
+        })
+        // .after(|_feature, _rule, _scenario, _ev, _world| {
+        //     let docker: Docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
+        //     docker.stop_container(&_world.unwrap().container_name, None).await?;
+        // })
+        .run_and_exit("tests/features/url_shortener/url_shortener.feature")
+        .await;
+
+    // URLShortenerWorld::run("tests/features/url_shortener/url_shortener.feature").await;
     log::info!("Finished running feature files");
     log::logger().flush();
 }
