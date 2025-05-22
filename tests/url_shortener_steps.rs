@@ -126,7 +126,7 @@ async fn clean_shortener_service(_: &mut URLShortenerWorld) {
     if !image_exists {
         println!("Image doesn't exist");
         println!("Image doesn't exist");
-        panic!("There is no docker image found!");
+        panic!("There is no docker image found! Expected the following image name {}", image_name);
     }
 
     if containers.is_empty() {
