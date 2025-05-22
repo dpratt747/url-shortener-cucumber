@@ -1,5 +1,10 @@
+use bollard::container::{RestartContainerOptions, StartContainerOptions};
 use bollard::models::ImageSummary;
-use cucumber::{given, then, when, World as _};
+use bollard::query_parameters::{
+    ListContainersOptions, ListImagesOptions, RestartContainerOptionsBuilder, StopContainerOptions,
+};
+use bollard::Docker;
+use cucumber::{given, then, when, Cucumber, World as _};
 use rand::distr::Alphanumeric;
 use rand::Rng;
 use reqwest::Client;
@@ -7,7 +12,6 @@ use serde::de::Unexpected::Option;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use std::collections::HashMap;
-use bollard::container::RestartContainerOptions;
 
 const API: &str = "http://localhost:8080";
 
@@ -19,6 +23,39 @@ fn generate_random_url(base: &str) -> String {
         .collect();
 
     format!("{}/{}", base, random_part)
+}
+
+async fn get_container_id(docker: &Docker, filters: HashMap<String, Vec<String>>) -> std::option::Option<String> {
+    let containers = docker
+        .list_containers(Some(ListContainersOptions {
+            all: true, // Include stopped containers
+            filters: Some(filters.clone()),
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+
+    if let Some(container) = containers.first() {
+        if let Some(id) = container.id.as_ref() {
+            return Some(id.clone());
+        }
+    }
+    None
+}
+
+async fn wait_for_container_running(docker: &Docker, container_id: &str) {
+    loop {
+        let inspect = docker
+            .inspect_container(container_id, None::<bollard::container::InspectContainerOptions>)
+            .await
+            .expect("Unable to inspect container");
+
+        if let Some(state) = inspect.state {
+            if state.running.unwrap_or(false) {
+                return ();
+            }
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -41,32 +78,26 @@ pub struct URLShortenerWorld {
 async fn clean_shortener_service(_: &mut URLShortenerWorld) {
     let image_name = "url_shortener_rust";
     let container_name = "url_shortener_rust_container";
-    let docker = bollard::Docker::connect_with_socket_defaults().unwrap();
+    let docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
 
-    let docker_images: Vec<ImageSummary> = docker
-        .list_images(None::<bollard::query_parameters::ListImagesOptions>)
-        .await
-        .unwrap();
+    let docker_images: Vec<ImageSummary> =
+        docker.list_images(None::<ListImagesOptions>).await.expect("Unable to list images");
 
     let image_exists = docker_images
         .iter()
         .any(|img| img.repo_tags.iter().any(|s| s.contains(image_name)));
 
-    println!("image exists: {}", image_exists);
-    println!("image exists: {}", image_exists);
-    println!("image exists: {}", image_exists);
-
-    let mut filters_map = HashMap::new();
+    let mut filters_map: HashMap<String, Vec<String>> = HashMap::new();
     filters_map.insert("name".to_string(), vec![container_name.to_string()]);
 
     let containers = docker
-        .list_containers(Some(bollard::query_parameters::ListContainersOptions {
+        .list_containers(Some(ListContainersOptions {
             all: true, // Include stopped containers
-            filters: Some(filters_map),
+            filters: Some(filters_map.clone()),
             ..Default::default()
         }))
         .await
-        .unwrap();
+        .expect("Unable to list containers");
 
     // Configure the container
     let config = bollard::models::ContainerCreateBody {
@@ -92,46 +123,35 @@ async fn clean_shortener_service(_: &mut URLShortenerWorld) {
         .name(container_name)
         .build();
 
-    let container = docker
-        .create_container(Some(create_options), config)
-        .await
-        .expect("Could not create container");
-
-    if containers.is_empty() && image_exists {
-        println!("no containers found");
-        println!("no containers found");
-        println!("no containers found");
-
-        // run the image
-        docker
-            .start_container(
-                &container.id,
-                None::<bollard::query_parameters::StartContainerOptions>,
-            )
-            .await
-            .unwrap();
-        // docker.start_container(&container.id, None).await.expect("TODO: panic message");
-        println!("containers started");
-        println!("containers started");
-        println!("containers started");
-    } else if !containers.is_empty() {
-        // restart the container
-        docker
-            .restart_container(
-                &container.id,
-                None::<bollard::query_parameters::RestartContainerOptions>,
-                // RestartContainerOptions
-                // None,
-            )
-            .await
-            .unwrap();
-        println!("containers restarted");
-        println!("containers restarted");
-        println!("containers restarted");
-    } else {
-        // create an image?
-        panic!("image not found");
+    if !image_exists {
+        println!("Image doesn't exist");
+        println!("Image doesn't exist");
+        panic!("There is no docker image found!");
     }
+
+    if containers.is_empty() {
+        println!("container doesn't exist");
+        println!("container doesn't exist");
+        println!("container doesn't exist");
+
+        docker
+            .create_container(Some(create_options), config)
+            .await
+            .expect("Could not create container");
+    }
+
+    // restart the container
+    docker
+        .restart_container(
+            &get_container_id(&docker, filters_map.clone()).await.expect("Unable to get container id"),
+            None::<RestartContainerOptions>,
+        )
+        .await
+        .expect("Could not restart container");
+
+    // need to wait for the restart to finish
+
+    wait_for_container_running(&docker, &get_container_id(&docker, filters_map.clone()).await.expect("Unable to get container id")).await;
 }
 
 #[given(expr = "I have a long URL {string}")]
@@ -187,7 +207,7 @@ async fn post_shorten_n_times(_: &mut URLShortenerWorld, number_of_requests: u16
     let client: Client = Client::new();
     let endpoint: String = format!("{}/v1/shorten", API);
 
-    for i in 0..number_of_requests {
+    for _ in 0..number_of_requests {
         let body = ShortenUrlRequest {
             longUrl: generate_random_url("http://some_domain"),
         };
@@ -198,7 +218,7 @@ async fn post_shorten_n_times(_: &mut URLShortenerWorld, number_of_requests: u16
             .json(&json_body)
             .send()
             .await
-            .unwrap();
+            .expect("Could not send request");
 
         match response.status() {
             status if status.is_success() => {
