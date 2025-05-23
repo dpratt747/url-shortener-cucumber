@@ -82,7 +82,7 @@ fn get_available_host_port() -> Option<u16> {
 
 /// This function takes a URLShortenerWorld and assigns a random container_name and available container_port.
 /// This world is created per Scenario
-pub async fn create_and_start_docker_container(world: &mut URLShortenerWorld, image_name: &str) {
+pub async fn create_and_start_url_shortener_docker_container(world: &mut URLShortenerWorld, image_name: &str) {
     // let image_name = "url_shortener_rust"; // todo: expected image name
     world.container_name = generate_random_word(10).to_string();
     world.container_port = get_available_host_port().expect("Unable to get available host port");
