@@ -1,4 +1,4 @@
-use cucumber::{given, then, when, World as _};
+use cucumber::{World as _, given, then, when};
 use simple_logger::SimpleLogger;
 mod common;
 
@@ -144,12 +144,15 @@ async fn main() {
     // One container is created and closed per scenario
     URLShortenerWorld::cucumber()
         .before(|_feature, _rule, _scenario, _world| {
-            Box::pin(async move { // converts async block of code into a future
+            Box::pin(async move {
+                // converts async block of code into a future
                 // todo: can configure the name of the image that you want to run here
-                utility::create_and_start_url_shortener_docker_container(
+                utility::create_and_start_docker_container(
                     _world,
                     "url_shortener_rust",
                     "8080",
+                    "The server has been started",
+                    None,
                 )
                 .await;
             })

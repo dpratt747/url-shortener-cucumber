@@ -74,10 +74,12 @@ fn get_available_host_port() -> Option<u16> {
 
 /// This function takes a URLShortenerWorld and assigns a random container_name and available container_port.
 /// This world is created per Scenario
-pub async fn create_and_start_url_shortener_docker_container(
+pub async fn create_and_start_docker_container(
     world: &mut URLShortenerWorld,
     image_name: &str,
     container_internal_port: &str,
+    expected_start_message: &str,
+    environment_variables: Option<Vec<String>>
 ) {
     world.container_name = generate_random_word(10).to_string();
     world.container_host_port = get_available_host_port().expect("Unable to get available host port");
@@ -106,6 +108,7 @@ pub async fn create_and_start_url_shortener_docker_container(
     // Configure the container
     let config = bollard::models::ContainerCreateBody {
         image: Some(format!("{}:latest", image_name)), // todo: can configure the image version here
+        env: environment_variables,
         host_config: Some(bollard::models::HostConfig {
             port_bindings: Some({
                 let mut port_bindings = HashMap::new();
@@ -142,7 +145,7 @@ pub async fn create_and_start_url_shortener_docker_container(
     wait_for_log_message(
         &docker,
         world.container_name.as_str(),
-        "The server has been started",
+        expected_start_message,
         Duration::from_secs(4),
     )
     .await
@@ -160,5 +163,6 @@ pub async fn stop_docker_container(container_name: &str) {
     docker
         .remove_container(container_name, Some(options))
         .await
-        .expect("Unable to remove container");
+        .expect("Unable to remove container - are you sure it is running?");
+
 }
