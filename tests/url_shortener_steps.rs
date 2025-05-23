@@ -175,7 +175,11 @@ async fn main() {
         .before(|_feature, _rule, _scenario, _world| {
             Box::pin(async move {
                 // todo: can configure the name of the image that you want to run here
-                utility::create_and_start_url_shortener_docker_container(_world, "url_shortener_rust").await;
+                utility::create_and_start_url_shortener_docker_container(
+                    _world,
+                    "url_shortener_rust",
+
+                ).await;
             })
         })
         .after(|_feature, _rule, _scenario, _ev, _world| {

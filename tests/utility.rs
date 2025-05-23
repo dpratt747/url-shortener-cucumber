@@ -7,6 +7,7 @@ use bollard::query_parameters::{ListContainersOptions, ListImagesOptions, StopCo
 use rand::Rng;
 use rand::distr::Alphanumeric;
 use std::collections::HashMap;
+use std::fmt::format;
 use std::net::TcpListener;
 
 pub fn generate_random_url(base: &str) -> String {
@@ -82,8 +83,7 @@ fn get_available_host_port() -> Option<u16> {
 
 /// This function takes a URLShortenerWorld and assigns a random container_name and available container_port.
 /// This world is created per Scenario
-pub async fn create_and_start_url_shortener_docker_container(world: &mut URLShortenerWorld, image_name: &str) {
-    // let image_name = "url_shortener_rust"; // todo: expected image name
+pub async fn create_and_start_url_shortener_docker_container(world: &mut URLShortenerWorld, image_name: &str, container_internal_port: &str) {
     world.container_name = generate_random_word(10).to_string();
     world.container_port = get_available_host_port().expect("Unable to get available host port");
 
@@ -115,7 +115,7 @@ pub async fn create_and_start_url_shortener_docker_container(world: &mut URLShor
             port_bindings: Some({
                 let mut port_bindings = HashMap::new();
                 port_bindings.insert(
-                    "8080/tcp".to_string(), // todo: internal docker port
+                    format!("{}/tcp", container_internal_port), //todo: internal docker port
                     Some(vec![bollard::models::PortBinding {
                         host_ip: Some("0.0.0.0".to_string()), // Bind to all interfaces
                         host_port: Some(world.container_port.to_string()), // todo: host machine port
