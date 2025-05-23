@@ -1,13 +1,13 @@
 #![allow(warnings)]
-use bollard::Docker;
 use bollard::container::{RestartContainerOptions, StartContainerOptions};
 use bollard::models::ImageSummary;
 use bollard::query_parameters::{
     ListContainersOptions, ListImagesOptions, RestartContainerOptionsBuilder, StopContainerOptions,
 };
-use cucumber::{Cucumber, World as _, given, then, when};
-use rand::Rng;
+use bollard::Docker;
+use cucumber::{given, then, when, Cucumber, World as _};
 use rand::distr::Alphanumeric;
+use rand::Rng;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
@@ -15,76 +15,6 @@ use std::collections::HashMap;
 use std::net::TcpListener;
 
 mod utility;
-
-fn generate_random_url(base: &str) -> String {
-    let random_part: String = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(10)
-        .map(char::from)
-        .collect();
-
-    format!("{}/{}", base, random_part)
-}
-
-fn generate_random_word(length: usize) -> String {
-    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
-    let mut rng = rand::rng();
-
-    (0..length)
-        .map(|_| {
-            let idx = rng.random_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect()
-}
-
-async fn get_container_id(
-    docker: &Docker,
-    filters: HashMap<String, Vec<String>>,
-) -> Option<String> {
-    let containers = docker
-        .list_containers(Some(ListContainersOptions {
-            all: true, // Include stopped containers
-            filters: Some(filters.clone()),
-            ..Default::default()
-        }))
-        .await
-        .unwrap();
-
-    if let Some(container) = containers.first() {
-        if let Some(id) = container.id.as_ref() {
-            return Some(id.clone());
-        }
-    }
-    None
-}
-
-async fn wait_for_container_to_start_running(docker: &Docker, container_id: &str) {
-    loop {
-        let inspect = docker
-            .inspect_container(
-                container_id,
-                None::<bollard::container::InspectContainerOptions>,
-            )
-            .await
-            .expect("Unable to inspect container");
-
-        if let Some(state) = inspect.state {
-            if state.running.unwrap_or(false) {
-                return ();
-            }
-        }
-    }
-}
-
-fn get_available_host_port(world: &mut URLShortenerWorld) {
-    // Binding to port 0 lets the OS assign an available port
-    if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
-        if let Ok(addr) = listener.local_addr() {
-            world.container_port = addr.port();
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct GetAllShortenUrlResponse(HashMap<String, String>);
@@ -108,11 +38,7 @@ pub struct URLShortenerWorld {
 async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
     let image_name = "url_shortener_rust";
 
-    world.container_name = generate_random_word(10).to_string();
-
-    println!("container_name: {}", world.container_name);
-    println!("container_name: {}", world.container_name);
-    println!("container_name: {}", world.container_name);
+    world.container_name = utility::generate_random_word(10).to_string();
 
     let docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
 
@@ -128,7 +54,7 @@ async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
     let mut filters_map: HashMap<String, Vec<String>> = HashMap::new();
     filters_map.insert("name".to_string(), vec![world.container_name.clone()]);
 
-    get_available_host_port(world);
+    utility::get_available_host_port(world);
 
     // Configure the container
     let config = bollard::models::ContainerCreateBody {
@@ -174,9 +100,9 @@ async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
         .expect("Could not start container");
 
     // need to wait for the restart to finish
-    wait_for_container_to_start_running(
+    utility::wait_for_container_to_start_running(
         &docker,
-        &get_container_id(&docker, filters_map.clone())
+        &utility::get_container_id(&docker, filters_map.clone())
             .await
             .expect("Unable to get container id"),
     )
@@ -241,7 +167,7 @@ async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests:
 
     for _ in 0..number_of_requests {
         let body = ShortenUrlRequest {
-            longUrl: generate_random_url("http://some_domain"),
+            longUrl: utility::generate_random_url("http://some_domain"),
         };
         let json_body: serde_json::Value = serde_json::to_value(&body).unwrap();
 
@@ -315,11 +241,6 @@ async fn main() {
                 let docker =
                     Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
                 if let Some(world) = _world {
-
-                    println!("stopping container: {}", world.container_name);
-                    println!("stopping container: {}", world.container_name);
-                    println!("stopping container: {}", world.container_name);
-
                     docker
                         .stop_container(&world.container_name, None::<StopContainerOptions>)
                         .await
