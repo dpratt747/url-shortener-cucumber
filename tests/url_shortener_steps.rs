@@ -1,13 +1,13 @@
 #![allow(warnings)]
+use bollard::Docker;
 use bollard::container::{RestartContainerOptions, StartContainerOptions};
 use bollard::models::ImageSummary;
 use bollard::query_parameters::{
     ListContainersOptions, ListImagesOptions, RestartContainerOptionsBuilder, StopContainerOptions,
 };
-use bollard::Docker;
-use cucumber::{given, then, when, Cucumber, World as _};
-use rand::distr::Alphanumeric;
+use cucumber::{Cucumber, World as _, given, then, when};
 use rand::Rng;
+use rand::distr::Alphanumeric;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
@@ -36,9 +36,10 @@ pub struct URLShortenerWorld {
 
 #[given(expr = "I have a running url shortener docker container")]
 async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
-    let image_name = "url_shortener_rust";
-
+    let image_name = "url_shortener_rust"; // todo: expected image name
     world.container_name = utility::generate_random_word(10).to_string();
+    world.container_port =
+        utility::get_available_host_port().expect("Unable to get available host port");
 
     let docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
 
@@ -51,23 +52,27 @@ async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
         .iter()
         .any(|img| img.repo_tags.iter().any(|s| s.contains(image_name)));
 
+    if !image_exists {
+        panic!(
+            "There is no docker image found! Expected the following image name {}",
+            image_name
+        );
+    }
+
     let mut filters_map: HashMap<String, Vec<String>> = HashMap::new();
     filters_map.insert("name".to_string(), vec![world.container_name.clone()]);
 
-    world.container_port =
-        utility::get_available_host_port().expect("Unable to get available host port");
-
     // Configure the container
     let config = bollard::models::ContainerCreateBody {
-        image: Some(format!("{}:latest", image_name)),
+        image: Some(format!("{}:latest", image_name)), // todo: can configure the image version here
         host_config: Some(bollard::models::HostConfig {
             port_bindings: Some({
                 let mut port_bindings = HashMap::new();
                 port_bindings.insert(
-                    "8080/tcp".to_string(),
+                    "8080/tcp".to_string(), // todo: internal docker port
                     Some(vec![bollard::models::PortBinding {
                         host_ip: Some("0.0.0.0".to_string()), // Bind to all interfaces
-                        host_port: Some(world.container_port.to_string()), // Map to an available host port
+                        host_port: Some(world.container_port.to_string()), // todo: host machine port
                     }]),
                 );
                 port_bindings
@@ -81,13 +86,6 @@ async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
         .name(&world.container_name)
         .build();
 
-    if !image_exists {
-        panic!(
-            "There is no docker image found! Expected the following image name {}",
-            image_name
-        );
-    }
-
     docker
         .create_container(Some(create_options), config)
         .await
@@ -98,7 +96,7 @@ async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
         .await
         .expect("Could not start container");
 
-    // need to wait for the restart to finish
+    // need to wait for the container to be ready
     utility::wait_for_container_to_start_running(
         &docker,
         &utility::get_container_id(&docker, filters_map.clone())
@@ -116,12 +114,11 @@ async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) {
 #[when(expr = "I make a request to the shorten URL")]
 async fn send_shorten_request(world: &mut URLShortenerWorld) {
     let client: Client = Client::new();
-    let api = format!("http://localhost:{}", world.container_port.to_string());
-    let endpoint: String = format!("{}/v1/shorten", api);
+    let endpoint = format!("http://localhost:{}/v1/shorten", world.container_port.to_string());
     let body = ShortenUrlRequest {
         longUrl: world.long_url.clone(),
     };
-    let json_body: serde_json::Value = serde_json::to_value(&body).unwrap();
+    let json_body: serde_json::Value = serde_json::to_value(&body).expect("Unable to serialize json");
 
     let response = client
         .post(&endpoint)
@@ -160,15 +157,13 @@ async fn post_shorten_url_result(
 #[given(expr = "I make {int} requests to the shorten URL endpoint")]
 async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) {
     let client: Client = Client::new();
-    let api = format!("http://localhost:{}", world.container_port.to_string());
-
-    let endpoint: String = format!("{}/v1/shorten", api);
+    let endpoint = format!("http://localhost:{}/v1/shorten", world.container_port.to_string());
 
     for _ in 0..number_of_requests {
         let body = ShortenUrlRequest {
             longUrl: utility::generate_random_url("http://some_domain"),
         };
-        let json_body: serde_json::Value = serde_json::to_value(&body).unwrap();
+        let json_body: serde_json::Value = serde_json::to_value(&body).expect("Unable to serialize json");
 
         let response = client
             .post(&endpoint)
@@ -197,14 +192,13 @@ async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests:
 #[when(expr = "I make a request to get all shortened endpoints")]
 async fn get_all_shortened_urls(world: &mut URLShortenerWorld) {
     let client: Client = Client::new();
-    let api = format!("http://localhost:{}", world.container_port.to_string());
-    let endpoint: String = format!("{}/v1/all", api);
+    let endpoint = format!("http://localhost:{}/v1/all", world.container_port.to_string());
 
-    let response = client.get(&endpoint).send().await.unwrap();
+    let response = client.get(&endpoint).send().await.expect("Could not send request");
     let status = response.status();
-    let response_text = response.text().await.unwrap();
+    let response_text = response.text().await.expect("Could not get response text");
 
-    world.get_shortened_url_response = serde_json::from_str(&response_text).unwrap();
+    world.get_shortened_url_response = serde_json::from_str(&response_text).expect("Could not deserialize json");
 
     match status {
         status if status.is_success() => {
@@ -247,10 +241,6 @@ async fn main() {
                 }
             })
         })
-        // .after(|_feature, _rule, _scenario, _ev, _world| {
-        //     let docker: Docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
-        //     docker.stop_container(&_world.unwrap().container_name, None).await?;
-        // })
         .run_and_exit("tests/features/url_shortener/url_shortener.feature")
         .await;
 
