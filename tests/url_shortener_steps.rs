@@ -1,13 +1,13 @@
 #![allow(warnings)]
+use bollard::Docker;
 use bollard::container::{RestartContainerOptions, StartContainerOptions};
 use bollard::models::ImageSummary;
 use bollard::query_parameters::{
     ListContainersOptions, ListImagesOptions, RestartContainerOptionsBuilder, StopContainerOptions,
 };
-use bollard::Docker;
-use cucumber::{given, then, when, Cucumber, World as _};
-use rand::distr::Alphanumeric;
+use cucumber::{Cucumber, World as _, given, then, when};
 use rand::Rng;
+use rand::distr::Alphanumeric;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
@@ -35,7 +35,8 @@ async fn send_shorten_request(world: &mut URLShortenerWorld) -> () {
     let json_body: serde_json::Value =
         serde_json::to_value(&body).expect("Unable to serialize json");
 
-    let response = world.request_client
+    let response = world
+        .request_client
         .post(&endpoint)
         .json(&json_body)
         .send()
@@ -83,7 +84,8 @@ async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests:
         let json_body: serde_json::Value =
             serde_json::to_value(&body).expect("Unable to serialize json");
 
-        let response = world.request_client
+        let response = world
+            .request_client
             .post(&endpoint)
             .json(&json_body)
             .send()
@@ -114,7 +116,8 @@ async fn get_all_shortened_urls(world: &mut URLShortenerWorld) {
         world.container_port.to_string()
     );
 
-    let response = world.request_client
+    let response = world
+        .request_client
         .get(&endpoint)
         .send()
         .await
@@ -151,10 +154,10 @@ async fn main() {
     SimpleLogger::new().init().unwrap();
     log::info!("Running feature files");
 
-    // one container is created and closed per scenario
+    // One container is created and closed per scenario
     URLShortenerWorld::cucumber()
         .before(|_feature, _rule, _scenario, _world| {
-            Box::pin(async move {
+            Box::pin(async move { // converts async block of code into a future
                 // todo: can configure the name of the image that you want to run here
                 utility::create_and_start_url_shortener_docker_container(
                     _world,

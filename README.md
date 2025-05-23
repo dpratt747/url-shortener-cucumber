@@ -24,10 +24,16 @@ docker build -t url_shortener_rust .
 
 
 clean containers
-````bash
+```bash
 docker stop $(docker ps -a -q) && docker container prune
 ```
 
 ---
 
 The specs now create a new docker container for each scenario and stops the container after each scenario
+
+
+```bash
+cargo run --bin url-shortener-cucumber
+cargo test
+```

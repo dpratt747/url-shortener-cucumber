@@ -16,6 +16,10 @@ rand = "0.9.1"
 
 [dependencies]
 
+[[bin]]
+name = "url-shortener-cucumber"
+path = "src/main.rs"
+test = false  # This prevents testing main.rs
 
 [[test]]
 name = "url_shortener_steps"
