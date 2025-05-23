@@ -25,7 +25,6 @@ async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) -> () {
 
 #[when(expr = "I make a request to the shorten URL endpoint")]
 async fn send_shorten_request(world: &mut URLShortenerWorld) -> () {
-    let client: Client = Client::new();
     let endpoint = format!(
         "http://localhost:{}/v1/shorten",
         world.container_port.to_string()
@@ -36,7 +35,7 @@ async fn send_shorten_request(world: &mut URLShortenerWorld) -> () {
     let json_body: serde_json::Value =
         serde_json::to_value(&body).expect("Unable to serialize json");
 
-    let response = client
+    let response = world.request_client
         .post(&endpoint)
         .json(&json_body)
         .send()
@@ -72,7 +71,6 @@ async fn post_shorten_url_result(
 
 #[given(expr = "I make {int} requests to the shorten URL endpoint")]
 async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) -> () {
-    let client: Client = Client::new();
     let endpoint = format!(
         "http://localhost:{}/v1/shorten",
         world.container_port.to_string()
@@ -85,7 +83,7 @@ async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests:
         let json_body: serde_json::Value =
             serde_json::to_value(&body).expect("Unable to serialize json");
 
-        let response = client
+        let response = world.request_client
             .post(&endpoint)
             .json(&json_body)
             .send()
@@ -111,13 +109,12 @@ async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests:
 
 #[when(expr = "I make a request to get all the shortened URLs")]
 async fn get_all_shortened_urls(world: &mut URLShortenerWorld) {
-    let client: Client = Client::new();
     let endpoint = format!(
         "http://localhost:{}/v1/all",
         world.container_port.to_string()
     );
 
-    let response = client
+    let response = world.request_client
         .get(&endpoint)
         .send()
         .await

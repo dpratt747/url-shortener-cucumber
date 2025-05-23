@@ -10,6 +10,7 @@ pub struct ShortenUrlRequest {
     pub longUrl: String,
 }
 
+/// Default will automatically implement the Default for the following fields
 #[derive(cucumber::World, Debug, Default)]
 pub struct URLShortenerWorld {
     pub long_url: String,
@@ -17,4 +18,5 @@ pub struct URLShortenerWorld {
     pub get_shortened_url_response: GetAllShortenUrlResponse,
     pub container_port: u16,
     pub container_name: String,
+    pub request_client: reqwest::Client
 }
