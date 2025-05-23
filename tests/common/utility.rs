@@ -2,7 +2,7 @@
 use bollard::Docker;
 use bollard::container::StartContainerOptions;
 use bollard::models::ImageSummary;
-use bollard::query_parameters::{ListContainersOptions, ListImagesOptions, StopContainerOptions};
+use bollard::query_parameters::{ListContainersOptions, ListImagesOptions, RemoveContainerOptions};
 use rand::Rng;
 use rand::distr::Alphanumeric;
 use std::collections::HashMap;
@@ -159,8 +159,14 @@ pub async fn create_and_start_url_shortener_docker_container(
 
 pub async fn stop_docker_container(container_name: &str) {
     let docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
+
+    let options = RemoveContainerOptions {
+        force: true,
+        ..Default::default()
+    };
+
     docker
-        .stop_container(container_name, None::<StopContainerOptions>)
+        .remove_container(container_name, Some(options))
         .await
-        .expect("Unable to stop the container");
+        .expect("Unable to remove container");
 }
