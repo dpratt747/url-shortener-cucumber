@@ -1,14 +1,16 @@
 #![allow(warnings)]
-use bollard::Docker;
-use bollard::container::StartContainerOptions;
+use crate::models::URLShortenerWorld;
+use bollard::container::{LogsOptions, StartContainerOptions};
 use bollard::models::ImageSummary;
-use bollard::query_parameters::{ListContainersOptions, ListImagesOptions, RemoveContainerOptions};
-use rand::Rng;
+use bollard::query_parameters::{ListImagesOptions, RemoveContainerOptions};
+use bollard::Docker;
+use futures::StreamExt;
 use rand::distr::Alphanumeric;
+use rand::Rng;
 use std::collections::HashMap;
 use std::net::TcpListener;
-
-use crate::models::URLShortenerWorld;
+use std::time::Duration;
+use tokio::time::timeout;
 
 pub fn generate_random_url(base: &str) -> String {
     let mut rng = rand::rng();
@@ -33,43 +35,32 @@ fn generate_random_word(length: usize) -> String {
         .collect()
 }
 
-async fn get_container_id(
+async fn wait_for_log_message(
     docker: &Docker,
-    filters: HashMap<String, Vec<String>>,
-) -> Option<String> {
-    let containers = docker
-        .list_containers(Some(ListContainersOptions {
-            all: true, // Include stopped containers
-            filters: Some(filters.clone()),
-            ..Default::default()
-        }))
-        .await
-        .expect("Unable to list containers");
+    container_name: &str,
+    target_message: &str,
+    timeout_duration: Duration,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let options = Some(LogsOptions::<String> {
+        stdout: true,
+        stderr: true,
+        follow: true,
+        ..Default::default()
+    });
 
-    if let Some(container) = containers.first() {
-        if let Some(id) = container.id.as_ref() {
-            return Some(id.clone());
-        }
-    }
-    None
-}
+    let mut stream = docker.logs(container_name, options);
 
-async fn wait_for_container_to_start_running(docker: &Docker, container_id: &str) {
-    loop {
-        let inspect = docker
-            .inspect_container(
-                container_id,
-                None::<bollard::container::InspectContainerOptions>,
-            )
-            .await
-            .expect("Unable to inspect container");
-
-        if let Some(state) = inspect.state {
-            if state.running.unwrap_or(false) {
-                return ();
+    timeout(timeout_duration, async {
+        while let Some(Ok(log)) = stream.next().await {
+            let log_message = log.to_string();
+            if log_message.contains(target_message) {
+                return Ok(());
             }
         }
-    }
+        Err("Stream ended without finding the target message".into())
+    })
+    .await
+    .unwrap_or_else(|_| Err("Timeout reached while waiting for log message".into()))
 }
 
 fn get_available_host_port() -> Option<u16> {
@@ -147,14 +138,16 @@ pub async fn create_and_start_url_shortener_docker_container(
         .await
         .expect("Could not start container");
 
-    // need to wait for the container to be ready
-    wait_for_container_to_start_running(
+    // std::thread::sleep(std::time::Duration::from_millis(500));
+
+    wait_for_log_message(
         &docker,
-        &get_container_id(&docker, filters_map.clone())
-            .await
-            .expect("Unable to get container id"),
+        world.container_name.as_str(),
+        "The server has been started",
+        Duration::from_secs(4),
     )
-    .await;
+    .await
+    .expect("Error whilst waiting for the container log messages");
 }
 
 pub async fn stop_docker_container(container_name: &str) {

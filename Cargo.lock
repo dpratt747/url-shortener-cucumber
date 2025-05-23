@@ -2213,6 +2213,7 @@ version = "0.1.0"
 dependencies = [
  "bollard",
  "cucumber",
+ "futures",
  "log",
  "rand",
  "reqwest",

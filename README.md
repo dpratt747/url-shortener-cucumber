@@ -33,6 +33,14 @@ docker stop $(docker ps -a -q) && docker container prune
 The specs now create a new docker container for each scenario and stops the container after each scenario
 
 
+```text
+[[bin]]
+name = "url-shortener-cucumber"
+path = "src/main.rs"
+test = false  # This prevents testing main.rs
+```
+
+
 ```bash
 cargo run --bin url-shortener-cucumber
 cargo test
