@@ -13,34 +13,18 @@ use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use std::collections::HashMap;
 use std::net::TcpListener;
+mod common;
 
-mod utility;
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct GetAllShortenUrlResponse(HashMap<String, String>);
-
-#[derive(Debug, Serialize, Deserialize)]
-#[allow(non_snake_case)]
-struct ShortenUrlRequest {
-    longUrl: String,
-}
-
-#[derive(cucumber::World, Debug, Default)]
-pub struct URLShortenerWorld {
-    long_url: String,
-    shorten_url_status_code: u16,
-    get_shortened_url_response: GetAllShortenUrlResponse,
-    container_port: u16,
-    container_name: String,
-}
+use common::models::{ShortenUrlRequest, URLShortenerWorld};
+use common::*;
 
 #[given(expr = "I have a long URL {string}")]
-async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) {
+async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) -> () {
     world.long_url = url;
 }
 
 #[when(expr = "I make a request to the shorten URL endpoint")]
-async fn send_shorten_request(world: &mut URLShortenerWorld) {
+async fn send_shorten_request(world: &mut URLShortenerWorld) -> () {
     let client: Client = Client::new();
     let endpoint = format!(
         "http://localhost:{}/v1/shorten",
@@ -87,7 +71,7 @@ async fn post_shorten_url_result(
 }
 
 #[given(expr = "I make {int} requests to the shorten URL endpoint")]
-async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) {
+async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) -> () {
     let client: Client = Client::new();
     let endpoint = format!(
         "http://localhost:{}/v1/shorten",
@@ -178,8 +162,9 @@ async fn main() {
                 utility::create_and_start_url_shortener_docker_container(
                     _world,
                     "url_shortener_rust",
-
-                ).await;
+                    "8080",
+                )
+                .await;
             })
         })
         .after(|_feature, _rule, _scenario, _ev, _world| {

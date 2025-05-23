@@ -1,5 +1,4 @@
 #![allow(warnings)]
-use crate::URLShortenerWorld;
 use bollard::Docker;
 use bollard::container::StartContainerOptions;
 use bollard::models::ImageSummary;
@@ -7,11 +6,13 @@ use bollard::query_parameters::{ListContainersOptions, ListImagesOptions, StopCo
 use rand::Rng;
 use rand::distr::Alphanumeric;
 use std::collections::HashMap;
-use std::fmt::format;
 use std::net::TcpListener;
 
+use crate::models::URLShortenerWorld;
+
 pub fn generate_random_url(base: &str) -> String {
-    let random_part: String = rand::rng()
+    let mut rng = rand::rng();
+    let random_part: String = rng
         .sample_iter(&Alphanumeric)
         .take(10)
         .map(char::from)
@@ -43,7 +44,7 @@ async fn get_container_id(
             ..Default::default()
         }))
         .await
-        .unwrap();
+        .expect("Unable to list containers");
 
     if let Some(container) = containers.first() {
         if let Some(id) = container.id.as_ref() {
@@ -83,7 +84,11 @@ fn get_available_host_port() -> Option<u16> {
 
 /// This function takes a URLShortenerWorld and assigns a random container_name and available container_port.
 /// This world is created per Scenario
-pub async fn create_and_start_url_shortener_docker_container(world: &mut URLShortenerWorld, image_name: &str, container_internal_port: &str) {
+pub async fn create_and_start_url_shortener_docker_container(
+    world: &mut URLShortenerWorld,
+    image_name: &str,
+    container_internal_port: &str,
+) {
     world.container_name = generate_random_word(10).to_string();
     world.container_port = get_available_host_port().expect("Unable to get available host port");
 

@@ -20,3 +20,7 @@ rand = "0.9.1"
 [[test]]
 name = "url_shortener_steps"
 harness = false  # allows Cucumber to print output instead of libtest
+
+#[[test]]
+#name = "<some steps name>"
+#harness = false  # allows Cucumber to print output instead of libtest
