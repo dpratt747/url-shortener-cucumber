@@ -1,18 +1,5 @@
-#![allow(warnings)]
-use bollard::Docker;
-use bollard::container::{RestartContainerOptions, StartContainerOptions};
-use bollard::models::ImageSummary;
-use bollard::query_parameters::{
-    ListContainersOptions, ListImagesOptions, RestartContainerOptionsBuilder, StopContainerOptions,
-};
-use cucumber::{Cucumber, World as _, given, then, when};
-use rand::Rng;
-use rand::distr::Alphanumeric;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use cucumber::{given, then, when, World as _};
 use simple_logger::SimpleLogger;
-use std::collections::HashMap;
-use std::net::TcpListener;
 mod common;
 
 use common::models::{ShortenUrlRequest, URLShortenerWorld};
@@ -27,7 +14,7 @@ async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) -> () {
 async fn send_shorten_request(world: &mut URLShortenerWorld) -> () {
     let endpoint = format!(
         "http://localhost:{}/v1/shorten",
-        world.container_port.to_string()
+        world.container_host_port.to_string()
     );
     let body = ShortenUrlRequest {
         longUrl: world.long_url.clone(),
@@ -74,7 +61,7 @@ async fn post_shorten_url_result(
 async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) -> () {
     let endpoint = format!(
         "http://localhost:{}/v1/shorten",
-        world.container_port.to_string()
+        world.container_host_port.to_string()
     );
 
     for _ in 0..number_of_requests {
@@ -113,7 +100,7 @@ async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests:
 async fn get_all_shortened_urls(world: &mut URLShortenerWorld) {
     let endpoint = format!(
         "http://localhost:{}/v1/all",
-        world.container_port.to_string()
+        world.container_host_port.to_string()
     );
 
     let response = world

@@ -1,8 +1,6 @@
-#![allow(warnings)]
 use crate::models::URLShortenerWorld;
-use bollard::container::{LogsOptions, StartContainerOptions};
 use bollard::models::ImageSummary;
-use bollard::query_parameters::{ListImagesOptions, RemoveContainerOptions};
+use bollard::query_parameters::{ListImagesOptions, LogsOptionsBuilder, RemoveContainerOptions};
 use bollard::Docker;
 use futures::StreamExt;
 use rand::distr::Alphanumeric;
@@ -13,7 +11,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 pub fn generate_random_url(base: &str) -> String {
-    let mut rng = rand::rng();
+    let rng = rand::rng();
     let random_part: String = rng
         .sample_iter(&Alphanumeric)
         .take(10)
@@ -41,12 +39,13 @@ async fn wait_for_log_message(
     target_message: &str,
     timeout_duration: Duration,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let options = Some(LogsOptions::<String> {
-        stdout: true,
-        stderr: true,
-        follow: true,
-        ..Default::default()
-    });
+    let options = Some(
+        LogsOptionsBuilder::new()
+            .stdout(true)
+            .stderr(true)
+            .follow(true)
+            .build(),
+    );
 
     let mut stream = docker.logs(container_name, options);
 
@@ -81,7 +80,7 @@ pub async fn create_and_start_url_shortener_docker_container(
     container_internal_port: &str,
 ) {
     world.container_name = generate_random_word(10).to_string();
-    world.container_port = get_available_host_port().expect("Unable to get available host port");
+    world.container_host_port = get_available_host_port().expect("Unable to get available host port");
 
     let docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
 
@@ -114,7 +113,7 @@ pub async fn create_and_start_url_shortener_docker_container(
                     format!("{}/tcp", container_internal_port), //todo: internal docker port
                     Some(vec![bollard::models::PortBinding {
                         host_ip: Some("0.0.0.0".to_string()), // Bind to all interfaces
-                        host_port: Some(world.container_port.to_string()), // todo: host machine port
+                        host_port: Some(world.container_host_port.to_string()), // todo: host machine port
                     }]),
                 );
                 port_bindings
@@ -134,12 +133,12 @@ pub async fn create_and_start_url_shortener_docker_container(
         .expect("Could not create container");
 
     docker
-        .start_container(&world.container_name, None::<StartContainerOptions<String>>)
+        .start_container(&world.container_name, None::<bollard::query_parameters::StartContainerOptions>)
         .await
         .expect("Could not start container");
 
+    // can sleep here, wait for the appearance of a log message or configure health checks
     // std::thread::sleep(std::time::Duration::from_millis(500));
-
     wait_for_log_message(
         &docker,
         world.container_name.as_str(),
