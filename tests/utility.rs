@@ -1,19 +1,11 @@
-use std::collections::HashMap;
-use crate::URLShortenerWorld;
-use rand::Rng;
-use rand::distr::Alphanumeric;
-use std::net::TcpListener;
-use bollard::Docker;
+#![allow(warnings)]
 use bollard::query_parameters::ListContainersOptions;
+use bollard::Docker;
+use rand::distr::Alphanumeric;
+use rand::Rng;
+use std::collections::HashMap;
+use std::net::TcpListener;
 
-// use std::collections::HashMap;
-// use std::net::TcpListener;
-// use bollard::Docker;
-// use bollard::query_parameters::ListContainersOptions;
-// use rand::distr::Alphanumeric;
-// use rand::Rng;
-//
-//
 pub fn generate_random_url(base: &str) -> String {
     let random_part: String = rand::rng()
         .sample_iter(&Alphanumeric)
@@ -75,11 +67,11 @@ pub async fn wait_for_container_to_start_running(docker: &Docker, container_id: 
     }
 }
 
-pub fn get_available_host_port(world: &mut URLShortenerWorld) -> Option<u16> {
+pub fn get_available_host_port() -> Option<u16> {
     // Binding to port 0 lets the OS assign an available port
     if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
         if let Ok(addr) = listener.local_addr() {
-            world.container_port = addr.port();
+            return Some(addr.port());
         }
     }
     None

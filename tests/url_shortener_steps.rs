@@ -54,7 +54,8 @@ async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
     let mut filters_map: HashMap<String, Vec<String>> = HashMap::new();
     filters_map.insert("name".to_string(), vec![world.container_name.clone()]);
 
-    utility::get_available_host_port(world);
+    world.container_port =
+        utility::get_available_host_port().expect("Unable to get available host port");
 
     // Configure the container
     let config = bollard::models::ContainerCreateBody {
@@ -66,9 +67,7 @@ async fn create_shortener_docker_container(world: &mut URLShortenerWorld) {
                     "8080/tcp".to_string(),
                     Some(vec![bollard::models::PortBinding {
                         host_ip: Some("0.0.0.0".to_string()), // Bind to all interfaces
-                        host_port: Some(world.container_port.to_string()), // Map to host port 8080 // see if I can get free ports
-                                                                           // host_port: world.container_port.map(|a| a.to_string()),  // Map to host port 8080 // see if I can get free ports
-                                                                           // host_port: Some("8080".to_string()),  // Map to host port 8080 // see if I can get free ports
+                        host_port: Some(world.container_port.to_string()), // Map to an available host port
                     }]),
                 );
                 port_bindings
