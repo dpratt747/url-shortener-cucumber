@@ -111,7 +111,7 @@ async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) {
     world.long_url = url;
 }
 
-#[when(expr = "I make a request to the shorten URL")]
+#[when(expr = "I make a request to the shorten URL endpoint")]
 async fn send_shorten_request(world: &mut URLShortenerWorld) {
     let client: Client = Client::new();
     let endpoint = format!("http://localhost:{}/v1/shorten", world.container_port.to_string());
@@ -215,11 +215,11 @@ async fn get_all_shortened_urls(world: &mut URLShortenerWorld) {
 #[then(expr = "I get {int} shorten url responses")]
 async fn get_all_shortened_urls_equals_n_responses(
     world: &mut URLShortenerWorld,
-    expected_count: u16,
+    expected_count: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         world.get_shortened_url_response.0.len(),
-        expected_count as usize
+        expected_count
     );
     Ok(())
 }
@@ -237,7 +237,7 @@ async fn main() {
                     docker
                         .stop_container(&world.container_name, None::<StopContainerOptions>)
                         .await
-                        .expect("Unable to stop container");
+                        .expect("Unable to stop the container");
                 }
             })
         })
