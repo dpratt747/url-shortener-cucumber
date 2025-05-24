@@ -14,7 +14,7 @@ async fn have_a_long_url(world: &mut URLShortenerWorld, url: String) -> () {
 async fn send_shorten_request(world: &mut URLShortenerWorld) -> () {
     let endpoint = format!(
         "http://localhost:{}/v1/shorten",
-        world.container_host_port.to_string()
+        world.url_shortener_container_host_port.to_string()
     );
     let body = ShortenUrlRequest {
         longUrl: world.long_url.clone(),
@@ -61,7 +61,7 @@ async fn post_shorten_url_result(
 async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) -> () {
     let endpoint = format!(
         "http://localhost:{}/v1/shorten",
-        world.container_host_port.to_string()
+        world.url_shortener_container_host_port.to_string()
     );
 
     for _ in 0..number_of_requests {
@@ -100,7 +100,7 @@ async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests:
 async fn get_all_shortened_urls(world: &mut URLShortenerWorld) {
     let endpoint = format!(
         "http://localhost:{}/v1/all",
-        world.container_host_port.to_string()
+        world.url_shortener_container_host_port.to_string()
     );
 
     let response = world
@@ -147,20 +147,22 @@ async fn main() {
             Box::pin(async move {
                 // converts async block of code into a future
                 // todo: can configure the name of the image that you want to run here
-                utility::create_and_start_docker_container(
-                    _world,
+                let (container_name, container_port) = utility::create_and_start_docker_container(
                     "url_shortener_rust",
                     "8080",
                     "The server has been started",
                     None,
                 )
                 .await;
+
+                _world.url_shortener_container_name = container_name;
+                _world.url_shortener_container_host_port = container_port;
             })
         })
         .after(|_feature, _rule, _scenario, _ev, _world| {
             Box::pin(async move {
                 if let Some(world) = _world {
-                    utility::stop_docker_container(&world.container_name).await;
+                    utility::stop_docker_container(&world.url_shortener_container_name).await;
                 }
             })
         })

@@ -1,4 +1,3 @@
-use crate::models::URLShortenerWorld;
 use bollard::models::ImageSummary;
 use bollard::query_parameters::{ListImagesOptions, LogsOptionsBuilder, RemoveContainerOptions};
 use bollard::Docker;
@@ -75,14 +74,14 @@ fn get_available_host_port() -> Option<u16> {
 /// This function takes a URLShortenerWorld and assigns a random container_name and available container_port.
 /// This world is created per Scenario
 pub async fn create_and_start_docker_container(
-    world: &mut URLShortenerWorld,
     image_name: &str,
     container_internal_port: &str,
     expected_start_message: &str,
     environment_variables: Option<Vec<String>>
-) {
-    world.container_name = generate_random_word(10).to_string();
-    world.container_host_port = get_available_host_port().expect("Unable to get available host port");
+)-> (String, u16){
+
+    let container_name = generate_random_word(10).to_string();
+    let container_host_port = get_available_host_port().expect("Unable to get available host port");
 
     let docker = Docker::connect_with_socket_defaults().expect("Unable to connect to docker");
 
@@ -96,6 +95,7 @@ pub async fn create_and_start_docker_container(
         .any(|img| img.repo_tags.iter().any(|s| s.contains(image_name)));
 
     if !image_exists {
+        // maybe attempt to pull the image from docker hub
         panic!(
             "There is no docker image found! Expected the following image name {}",
             image_name
@@ -103,7 +103,7 @@ pub async fn create_and_start_docker_container(
     }
 
     let mut filters_map: HashMap<String, Vec<String>> = HashMap::new();
-    filters_map.insert("name".to_string(), vec![world.container_name.clone()]);
+    filters_map.insert("name".to_string(), vec![container_name.clone()]);
 
     // Configure the container
     let config = bollard::models::ContainerCreateBody {
@@ -116,7 +116,7 @@ pub async fn create_and_start_docker_container(
                     format!("{}/tcp", container_internal_port), //todo: internal docker port
                     Some(vec![bollard::models::PortBinding {
                         host_ip: Some("0.0.0.0".to_string()), // Bind to all interfaces
-                        host_port: Some(world.container_host_port.to_string()), // todo: host machine port
+                        host_port: Some(container_host_port.to_string()), // todo: host machine port
                     }]),
                 );
                 port_bindings
@@ -127,7 +127,7 @@ pub async fn create_and_start_docker_container(
     };
 
     let create_options = bollard::query_parameters::CreateContainerOptionsBuilder::default()
-        .name(&world.container_name)
+        .name(&container_name)
         .build();
 
     docker
@@ -136,7 +136,7 @@ pub async fn create_and_start_docker_container(
         .expect("Could not create container");
 
     docker
-        .start_container(&world.container_name, None::<bollard::query_parameters::StartContainerOptions>)
+        .start_container(&container_name, None::<bollard::query_parameters::StartContainerOptions>)
         .await
         .expect("Could not start container");
 
@@ -144,12 +144,14 @@ pub async fn create_and_start_docker_container(
     // std::thread::sleep(std::time::Duration::from_millis(500));
     wait_for_log_message(
         &docker,
-        world.container_name.as_str(),
+        container_name.as_str(),
         expected_start_message,
         Duration::from_secs(4),
     )
     .await
     .expect("Error whilst waiting for the container log messages");
+
+    (container_name, container_host_port)
 }
 
 pub async fn stop_docker_container(container_name: &str) {

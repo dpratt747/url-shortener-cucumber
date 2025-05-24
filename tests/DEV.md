@@ -11,8 +11,7 @@ let env: Option<Vec<String>> = Some(vec![
     "POSTGRES_PASSWORD=mysecretpassword".to_string(),
 ]);
 
-utility::create_and_start_docker_container(
-    &mut world,
+let (container_name, container_port) = utility::create_and_start_docker_container(
     "postgres", // image name
     "5432", // internal container port
     // expected message to see when the container is running and ready

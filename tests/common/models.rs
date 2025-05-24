@@ -16,7 +16,7 @@ pub struct URLShortenerWorld {
     pub long_url: String,
     pub shorten_url_status_code: u16,
     pub get_shortened_url_response: GetAllShortenUrlResponse,
-    pub container_host_port: u16,
-    pub container_name: String,
+    pub url_shortener_container_host_port: u16,
+    pub url_shortener_container_name: String,
     pub request_client: reqwest::Client
 }
