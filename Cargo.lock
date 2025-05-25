@@ -2221,6 +2221,7 @@ dependencies = [
  "serde_json",
  "simple_logger",
  "tokio",
+ "url",
 ]
 
 [[package]]

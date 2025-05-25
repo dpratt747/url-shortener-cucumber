@@ -1,5 +1,7 @@
 use cucumber::{World as _, given, then, when};
 use simple_logger::SimpleLogger;
+use url::Url;
+
 mod common;
 
 use common::models::{ShortenUrlRequest, URLShortenerWorld};
@@ -35,6 +37,7 @@ async fn send_shorten_request(world: &mut URLShortenerWorld) -> () {
             log::info!("Request successful! Status: {}", status);
             if let Ok(text) = response.text().await {
                 log::info!("Response body: {}", text);
+                world.shortened_url_endpoint = text.trim_matches('"').to_string();
             }
             world.shorten_url_status_code = status.as_u16();
         }
@@ -42,6 +45,7 @@ async fn send_shorten_request(world: &mut URLShortenerWorld) -> () {
             log::error!("Request failed! Status: {}", status);
             if let Ok(text) = response.text().await {
                 log::error!("Error response: {}", text);
+                world.shortened_url_endpoint = text;
             }
             world.shorten_url_status_code = status.as_u16();
         }
@@ -56,6 +60,33 @@ async fn post_shorten_url_result(
     assert_eq!(world.shorten_url_status_code, expected);
     Ok(())
 }
+
+#[then(expr = "using the returned shortened URL redirects me to {string}")]
+async fn make_redirect_request(
+    world: &mut URLShortenerWorld,
+    expected: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+
+    let parsed_url = Url::parse(&world.shortened_url_endpoint).unwrap();
+    let path = parsed_url.path().trim_start_matches("/");
+
+    let endpoint = format!(
+        "http://localhost:{}/{}",
+        world.url_shortener_container_host_port.to_string(),
+        path
+    );
+
+    let response = world
+        .request_client
+        .get(endpoint)
+        .send()
+        .await
+        .expect("Could not send request");
+
+    assert_eq!(response.url().as_str(), expected);
+    Ok(())
+}
+
 
 #[given(expr = "I make {int} requests to the shorten URL endpoint")]
 async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) -> () {
