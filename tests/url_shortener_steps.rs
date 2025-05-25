@@ -132,7 +132,7 @@ async fn get_all_shortened_urls_equals_n_responses(
     world: &mut URLShortenerWorld,
     expected_count: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(world.get_shortened_url_response.0.len(), expected_count);
+    assert_eq!(world.get_shortened_url_response.len(), expected_count);
     Ok(())
 }
 
@@ -146,12 +146,37 @@ async fn main() {
         .before(|_feature, _rule, _scenario, _world| {
             Box::pin(async move {
                 // converts async block of code into a future
-                // todo: can configure the name of the image that you want to run here
+
+                // spins up a postgres docker container and a container for the application/microservice that is under test
+
+                let env: Option<Vec<String>> = Some(vec![
+                    "POSTGRES_PASSWORD=postgres".to_string(),
+                    "POSTGRES_USER=postgres".to_string(),
+                    "POSTGRES_DB=url-shortener-db".to_string(),
+                ]);
+
+                let (postgres_container_name, postgres_container_port) =
+                    utility::create_and_start_docker_container(
+                        "postgres",
+                        "5432",
+                        "database system is ready to accept connections",
+                        env,
+                    )
+                    .await;
+
+                _world.db_port = postgres_container_port;
+                _world.db_container_name = postgres_container_name;
+
+                let env: Option<Vec<String>> = Some(vec![
+                    "DB_HOST=host.docker.internal".to_string(),
+                    format!("DB_PORT={}", _world.db_port).to_string(),
+                ]);
+
                 let (container_name, container_port) = utility::create_and_start_docker_container(
                     "url_shortener_rust",
                     "8080",
                     "The server has been started",
-                    None,
+                    env,
                 )
                 .await;
 
@@ -163,6 +188,7 @@ async fn main() {
             Box::pin(async move {
                 if let Some(world) = _world {
                     utility::stop_docker_container(&world.url_shortener_container_name).await;
+                    utility::stop_docker_container(&world.db_container_name).await;
                 }
             })
         })

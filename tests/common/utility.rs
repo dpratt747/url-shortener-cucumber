@@ -95,7 +95,7 @@ pub async fn create_and_start_docker_container(
         .any(|img| img.repo_tags.iter().any(|s| s.contains(image_name)));
 
     if !image_exists {
-        // maybe attempt to pull the image from docker hub
+        // todo: maybe attempt to pull the image from docker hub
         panic!(
             "There is no docker image found! Expected the following image name {}",
             image_name
