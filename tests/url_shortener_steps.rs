@@ -180,11 +180,16 @@ async fn main() {
 
                 // spins up a postgres docker container and a container for the application/microservice that is under test
 
+                let db_user = "postgres";
+                let db_pw = "postgres";
+                let db_name = "url-shortener-db";
+
                 let env: Option<Vec<String>> = Some(vec![
-                    "POSTGRES_PASSWORD=postgres".to_string(),
-                    "POSTGRES_USER=postgres".to_string(),
-                    "POSTGRES_DB=url-shortener-db".to_string(),
+                    format!("POSTGRES_PASSWORD={}", db_pw),
+                    format!("POSTGRES_USER={}", db_user),
+                    format!("POSTGRES_DB={}", db_name),
                 ]);
+
 
                 let (postgres_container_name, postgres_container_port) =
                     utility::create_and_start_docker_container(
@@ -200,6 +205,9 @@ async fn main() {
 
                 let env: Option<Vec<String>> = Some(vec![
                     "DB_HOST=host.docker.internal".to_string(),
+                    format!("DB_USER={}", db_user).to_string(),
+                    format!("DB_PASSWORD={}", db_pw).to_string(),
+                    format!("DB_NAME={}", db_name).to_string(),
                     format!("DB_PORT={}", _world.db_port).to_string(),
                 ]);
 
