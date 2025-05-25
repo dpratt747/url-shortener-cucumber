@@ -1,5 +1,5 @@
 use bollard::models::ImageSummary;
-use bollard::query_parameters::{ListImagesOptions, LogsOptionsBuilder, RemoveContainerOptions};
+use bollard::query_parameters::{CreateContainerOptionsBuilder, CreateImageOptionsBuilder, ListImagesOptions, LogsOptionsBuilder, RemoveContainerOptions, StartContainerOptions};
 use bollard::Docker;
 use futures::StreamExt;
 use rand::distr::Alphanumeric;
@@ -77,9 +77,8 @@ pub async fn create_and_start_docker_container(
     image_name: &str,
     container_internal_port: &str,
     expected_start_message: &str,
-    environment_variables: Option<Vec<String>>
-)-> (String, u16){
-
+    environment_variables: Option<Vec<String>>,
+) -> (String, u16) {
     let container_name = generate_random_word(10).to_string();
     let container_host_port = get_available_host_port().expect("Unable to get available host port");
 
@@ -95,11 +94,35 @@ pub async fn create_and_start_docker_container(
         .any(|img| img.repo_tags.iter().any(|s| s.contains(image_name)));
 
     if !image_exists {
-        // todo: maybe attempt to pull the image from docker hub
-        panic!(
-            "There is no docker image found! Expected the following image name {}",
-            image_name
+
+        println!("Image is not found attempting to pull the image");
+
+        let create_image_options = Some(
+            CreateImageOptionsBuilder::default()
+                .from_image(&image_name)
+                .tag("latest")
+                .build(),
         );
+
+        let mut stream = docker.create_image(create_image_options, None, None);
+
+        while let Some(message) = stream.next().await {
+            match message {
+                Ok(output) => {
+                    if let Some(status) = output.status {
+                        println!("Status: {}", status);
+                    }
+                    if let Some(progress) = output.progress {
+                        println!("Progress: {}", progress);
+                    }
+                }
+                Err(e) => panic!(
+                    "There is no docker image found! Expected the following image name [{}] {}",
+                    image_name,
+                    e
+                ),
+            }
+        }
     }
 
     let mut filters_map: HashMap<String, Vec<String>> = HashMap::new();
@@ -126,17 +149,20 @@ pub async fn create_and_start_docker_container(
         ..Default::default()
     };
 
-    let create_options = bollard::query_parameters::CreateContainerOptionsBuilder::default()
+    let create_options = Some(CreateContainerOptionsBuilder::default()
         .name(&container_name)
-        .build();
+        .build());
 
     docker
-        .create_container(Some(create_options), config)
+        .create_container(create_options, config)
         .await
         .expect("Could not create container");
 
     docker
-        .start_container(&container_name, None::<bollard::query_parameters::StartContainerOptions>)
+        .start_container(
+            &container_name,
+            None::<StartContainerOptions>,
+        )
         .await
         .expect("Could not start container");
 
@@ -166,5 +192,4 @@ pub async fn stop_docker_container(container_name: &str) {
         .remove_container(container_name, Some(options))
         .await
         .expect("Unable to remove container - are you sure it is running?");
-
 }
