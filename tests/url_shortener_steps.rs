@@ -169,7 +169,11 @@ async fn get_all_shortened_urls_equals_n_responses(
 
 #[tokio::main]
 async fn main() {
-    SimpleLogger::new().init().unwrap();
+    SimpleLogger::new()
+        .with_module_level("bollard", log::LevelFilter::Info)
+        .with_module_level("reqwest", log::LevelFilter::Info)
+        .init()
+        .unwrap();
     log::info!("Running feature files");
 
     // One container is created and closed per scenario
@@ -219,6 +223,7 @@ async fn main() {
                 )
                 .await;
 
+                // can change the container name to localhost and port to 8080 to test without containers
                 _world.url_shortener_container_name = container_name;
                 _world.url_shortener_container_host_port = container_port;
             })

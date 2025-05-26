@@ -95,7 +95,7 @@ pub async fn create_and_start_docker_container(
 
     if !image_exists {
 
-        println!("Image is not found attempting to pull the image");
+        log::info!("Image is not found attempting to pull the image");
 
         let create_image_options = Some(
             CreateImageOptionsBuilder::default()
@@ -110,10 +110,10 @@ pub async fn create_and_start_docker_container(
             match message {
                 Ok(output) => {
                     if let Some(status) = output.status {
-                        println!("Status: {}", status);
+                        log::info!("Status: {}", status);
                     }
                     if let Some(progress) = output.progress {
-                        println!("Progress: {}", progress);
+                        log::info!("Progress: {}", progress);
                     }
                 }
                 Err(e) => panic!(
