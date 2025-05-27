@@ -1,4 +1,4 @@
-use cucumber::{World as _, given, then, when};
+use cucumber::{given, then, when, World as _};
 use simple_logger::SimpleLogger;
 use url::Url;
 
@@ -66,7 +66,6 @@ async fn make_redirect_request(
     world: &mut URLShortenerWorld,
     expected: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
     let parsed_url = Url::parse(&world.shortened_url_endpoint).unwrap();
     let path = parsed_url.path().trim_start_matches("/");
 
@@ -86,7 +85,6 @@ async fn make_redirect_request(
     assert_eq!(response.url().as_str(), expected);
     Ok(())
 }
-
 
 #[given(expr = "I make {int} requests to the shorten URL endpoint")]
 async fn post_shorten_n_times(world: &mut URLShortenerWorld, number_of_requests: u16) -> () {
@@ -178,6 +176,7 @@ async fn main() {
 
     // One container is created and closed per scenario
     URLShortenerWorld::cucumber()
+        // .max_concurrent_scenarios(Some(5))
         .before(|_feature, _rule, _scenario, _world| {
             Box::pin(async move {
                 // converts async block of code into a future
@@ -193,7 +192,6 @@ async fn main() {
                     format!("POSTGRES_USER={}", db_user),
                     format!("POSTGRES_DB={}", db_name),
                 ]);
-
 
                 let (postgres_container_name, postgres_container_port) =
                     utility::create_and_start_docker_container(
