@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct GetAllShortenUrlResponse {
     long_url: String,
-    short_url: String
+    short_url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

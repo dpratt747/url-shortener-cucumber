@@ -1,4 +1,4 @@
-use cucumber::{given, then, when, World as _};
+use cucumber::{World as _, given, then, when};
 use simple_logger::SimpleLogger;
 use url::Url;
 

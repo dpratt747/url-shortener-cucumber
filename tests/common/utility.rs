@@ -1,9 +1,12 @@
-use bollard::models::ImageSummary;
-use bollard::query_parameters::{CreateContainerOptionsBuilder, CreateImageOptionsBuilder, ListImagesOptions, LogsOptionsBuilder, RemoveContainerOptions, StartContainerOptions};
 use bollard::Docker;
+use bollard::models::ImageSummary;
+use bollard::query_parameters::{
+    CreateContainerOptionsBuilder, CreateImageOptionsBuilder, ListImagesOptions,
+    LogsOptionsBuilder, RemoveContainerOptions, StartContainerOptions,
+};
 use futures::StreamExt;
-use rand::distr::Alphanumeric;
 use rand::Rng;
+use rand::distr::Alphanumeric;
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::time::Duration;
@@ -22,11 +25,9 @@ pub fn generate_random_url(base: &str) -> String {
 
 fn generate_random_word(length: usize) -> String {
     const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
-    let mut rng = rand::rng();
-
-    (0..length)
+    (1..=length)
         .map(|_| {
-            let idx = rng.random_range(0..CHARSET.len());
+            let idx = rand::rng().random_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect()
@@ -94,7 +95,6 @@ pub async fn create_and_start_docker_container(
         .any(|img| img.repo_tags.iter().any(|s| s.contains(image_name)));
 
     if !image_exists {
-
         log::info!("Image is not found attempting to pull the image");
 
         let create_image_options = Some(
@@ -118,8 +118,7 @@ pub async fn create_and_start_docker_container(
                 }
                 Err(e) => panic!(
                     "There is no docker image found! Expected the following image name [{}] {}",
-                    image_name,
-                    e
+                    image_name, e
                 ),
             }
         }
@@ -149,9 +148,11 @@ pub async fn create_and_start_docker_container(
         ..Default::default()
     };
 
-    let create_options = Some(CreateContainerOptionsBuilder::default()
-        .name(&container_name)
-        .build());
+    let create_options = Some(
+        CreateContainerOptionsBuilder::default()
+            .name(&container_name)
+            .build(),
+    );
 
     docker
         .create_container(create_options, config)
@@ -159,10 +160,7 @@ pub async fn create_and_start_docker_container(
         .expect("Could not create container");
 
     docker
-        .start_container(
-            &container_name,
-            None::<StartContainerOptions>,
-        )
+        .start_container(&container_name, None::<StartContainerOptions>)
         .await
         .expect("Could not start container");
 
